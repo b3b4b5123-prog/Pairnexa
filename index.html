@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pairnexa</title>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial, Helvetica, sans-serif;
+background:#0f172a;
+color:white;
+display:flex;
+flex-direction:column;
+align-items:center;
+min-height:100vh;
+}
+
+header{
+width:100%;
+padding:20px;
+text-align:center;
+background:#020617;
+font-size:28px;
+letter-spacing:2px;
+}
+
+.controls{
+margin-top:15px;
+display:flex;
+gap:10px;
+flex-wrap:wrap;
+justify-content:center;
+}
+
+select,button{
+padding:8px 14px;
+border:none;
+border-radius:8px;
+}
+
+#game{
+display:grid;
+gap:10px;
+margin-top:30px;
+}
+
+.card{
+background:#1e293b;
+border-radius:10px;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:28px;
+cursor:pointer;
+user-select:none;
+transition:0.2s;
+height:70px;
+width:70px;
+}
+
+.card.revealed{
+background:#38bdf8;
+}
+
+.stats{
+margin-top:20px;
+font-size:16px;
+text-align:center;
+}
+
+.overlay{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:#020617;
+display:flex;
+justify-content:center;
+align-items:center;
+z-index:1000;
+}
+
+.rules{
+background:#0f172a;
+padding:40px;
+border-radius:15px;
+max-width:500px;
+text-align:center;
+}
+
+.winPopup{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:rgba(0,0,0,0.7);
+display:none;
+justify-content:center;
+align-items:center;
+z-index:2000;
+}
+
+.winBox{
+background:#0f172a;
+padding:40px;
+border-radius:20px;
+text-align:center;
+animation:pop 0.4s ease;
+}
+
+@keyframes pop{
+0%{transform:scale(0.6);opacity:0}
+100%{transform:scale(1);opacity:1}
+}
+
+footer{
+margin-top:auto;
+padding:10px;
+font-size:12px;
+opacity:0.7;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="overlay" id="overlay">
+<div class="rules">
+
+<h2>Welcome</h2>
+
+<p>
+Reveal cards and match pairs. Choose a category and grid size,
+then try to finish the board using the lowest number of moves.
+</p>
+
+<p>
+Rules:
+<br><br>
+• Tap two cards to reveal them  
+<br>
+• Matching cards stay open  
+<br>
+• Non-matching cards flip back  
+<br>
+• Finish the board using the fewest moves
+</p>
+
+<button onclick="start()">Start</button>
+
+</div>
+</div>
+
+<header>Pairnexa</header>
+
+<div class="controls">
+
+<select id="categorySelect" onchange="changeSettings()">
+<option value="fruits">Fruits</option>
+<option value="vegetables">Vegetables</option>
+<option value="brands">Brands</option>
+</select>
+
+<select id="sizeSelect" onchange="changeSettings()">
+<option value="4">4 x 4</option>
+<option value="6">6 x 6</option>
+<option value="8">8 x 8</option>
+</select>
+
+<button onclick="restart()">Restart</button>
+
+</div>
+
+<div id="game"></div>
+
+<div class="stats">
+Moves: <span id="moves">0</span><br>
+Best Score: <span id="best">-</span>
+</div>
+
+<footer>Memory challenge</footer>
+
+<div class="winPopup" id="winPopup">
+<div class="winBox">
+<h2>🎉 Completed!</h2>
+<p id="winText"></p>
+<button onclick="restartGame()">Play Again</button>
+</div>
+</div>
+
+<script>
+
+const categories={
+fruits:["🍎","🍌","🍒","🍇","🍉","🍍","🥝","🍑","🍐","🍓","🥭","🍋","🍈","🍏","🥥","🫐","🍊","🥑"],
+vegetables:["🥕","🌽","🥦","🍆","🥔","🧅","🧄","🌶️","🥬","🥒","🫛","🍅","🥑","🌰","🫑","🥜","🫒","🥔"],
+brands:["🍏","🪟","🎮","📦","🚗","💻","📱","🛒","⌚","🎧","📷","✈️","🛰️","🔋","💳","📺","🎬","🧠"]
+}
+
+let currentCategory="fruits"
+let gridSize=4
+
+let first=null
+let second=null
+let lock=false
+let moves=0
+
+function getBestKey(){
+return "memory_"+currentCategory+"_"+gridSize
+}
+
+function loadBest(){
+let best=localStorage.getItem(getBestKey())
+document.getElementById("best").textContent=best?best:"-"
+}
+
+function start(){
+document.getElementById("overlay").style.display="none"
+changeSettings()
+}
+
+function changeSettings(){
+
+currentCategory=document.getElementById("categorySelect").value
+gridSize=parseInt(document.getElementById("sizeSelect").value)
+
+init()
+loadBest()
+
+}
+
+function init(){
+
+const board=document.getElementById("game")
+board.innerHTML=""
+
+board.style.gridTemplateColumns=`repeat(${gridSize},70px)`
+
+let total=gridSize*gridSize
+let pairs=total/2
+
+let symbols=[...categories[currentCategory]].slice(0,pairs)
+
+let cards=[...symbols,...symbols]
+
+cards.sort(()=>Math.random()-0.5)
+
+cards.forEach(symbol=>{
+
+const card=document.createElement("div")
+card.className="card"
+card.dataset.symbol=symbol
+
+card.onclick=()=>flip(card)
+
+board.appendChild(card)
+
+})
+
+moves=0
+updateMoves()
+
+}
+
+function flip(card){
+
+if(lock||card.classList.contains("revealed"))return
+
+card.textContent=card.dataset.symbol
+card.classList.add("revealed")
+
+if(!first){
+first=card
+return
+}
+
+second=card
+moves++
+updateMoves()
+
+if(first.dataset.symbol===second.dataset.symbol){
+
+first=null
+second=null
+checkWin()
+
+}else{
+
+lock=true
+
+setTimeout(()=>{
+
+first.textContent=""
+second.textContent=""
+
+first.classList.remove("revealed")
+second.classList.remove("revealed")
+
+first=null
+second=null
+lock=false
+
+},700)
+
+}
+
+}
+
+function updateMoves(){
+document.getElementById("moves").textContent=moves
+}
+
+function checkWin(){
+
+const revealed=document.querySelectorAll(".revealed").length
+let total=gridSize*gridSize
+
+if(revealed===total){
+
+let best=localStorage.getItem(getBestKey())
+
+if(!best||moves<best){
+localStorage.setItem(getBestKey(),moves)
+loadBest()
+}
+
+document.getElementById("winText").textContent=
+"You finished a "+gridSize+"x"+gridSize+" board in "+moves+" moves."
+
+document.getElementById("winPopup").style.display="flex"
+
+}
+
+}
+
+function restart(){
+init()
+}
+
+function restartGame(){
+document.getElementById("winPopup").style.display="none"
+init()
+}
+
+</script>
+
+</body>
+</html>
